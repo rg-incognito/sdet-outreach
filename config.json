@@ -1,0 +1,18 @@
+{
+  "search": {
+    "queries": [
+      "(\"Automation Test Engineer\" OR SDET) AND (\"send resume\" OR \"email resume\" OR \"share your CV\" OR \"mail your CV\")",
+      "(\"Automation Test Engineer\" OR SDET) (\"careers@\" OR \"hr@\" OR \"recruitment@\" OR \"talent@\" OR \"jobs@\")"
+    ],
+    "maxJobsPerRun": 50,
+    "regionGeoUrn": ""
+  },
+  "sources": {
+    "linkedin": {
+      "storageStatePath": "data/storageState.json"
+    }
+  },
+  "masterResumePath": "Vaishnavi_Salve_Resume.pdf",
+  "candidateName": "Vaishnavi Salve",
+  "candidatePhone": "+91-9307802587"
+}

@@ -1,0 +1,33 @@
+{
+  "name": "sdet-outreach",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated LinkedIn scraping and AI-personalized recruiter outreach for Automation Test Engineer / SDET roles",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "linkedin-login": "tsx scripts/linkedin-login.ts",
+    "scrape-to-sheet": "tsx scripts/scrape-to-sheet.ts",
+    "run-all": "tsx scripts/run-all.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "mammoth": "^1.8.0",
+    "marked": "^14.1.2",
+    "nodemailer": "^9.0.3",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.48.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "@types/nodemailer": "^8.0.1",
+    "@types/pdf-parse": "^1.1.5",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}
