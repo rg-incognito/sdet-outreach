@@ -1,11 +1,11 @@
 # Registers a single Windows Scheduled Task for the complete local flow
 # (npm run run-all: scrape LinkedIn -> Posts sheet -> tailor + send for every pending
-# row, all in one sequential process). Runs once at logon (i.e. when you start/log into
-# this laptop), then repeats every 2 hours after that for as long as the machine stays
-# on and you stay logged in.
+# row, all in one sequential process). Fires exactly twice a day, at 9:00 AM and 6:00 PM,
+# for as long as the machine is on and you're logged in at those times.
 #
 # One task, not two: run-all does scrape then send in the same process, so there's no
-# risk of two separately-scheduled steps opening data/tracker.xlsx at the same time.
+# risk of two separately-scheduled steps racing to write the online Google Sheet at the
+# same time.
 
 $ErrorActionPreference = "Stop"
 
@@ -14,25 +14,19 @@ $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c npm run run-a
 
 $currentUser = "$env:USERDOMAIN\$env:USERNAME"
 
-# -AtLogOn needs an explicit -User (both on the trigger and on Register-ScheduledTask
-# below) - registering it without one fails with "Access is denied" even for a task
-# scoped to the current user's own limited privileges.
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
-# -AtLogOn has no repetition parameters of its own; borrow the Repetition CIM instance
-# from a throwaway time-based trigger and attach it to the logon trigger.
-# [TimeSpan]::MaxValue exceeds Task Scheduler's valid duration range - use a large but
-# in-range duration instead (10 years is effectively "indefinitely" for this purpose).
-$repeatingTemplate = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Hours 2) -RepetitionDuration (New-TimeSpan -Days 3650)
-$trigger.Repetition = $repeatingTemplate.Repetition
+# Two fixed daily times rather than a logon + repeat-every-N-hours trigger, so this always
+# runs exactly twice a day regardless of how many times the machine is logged into.
+$morningTrigger = New-ScheduledTaskTrigger -Daily -At "9:00AM"
+$eveningTrigger = New-ScheduledTaskTrigger -Daily -At "6:00PM"
 
 # ExecutionTimeLimit guards against a hung run (e.g. a LinkedIn checkpoint causing the
 # scrape to stall, or a slow Gemini/Gmail call) blocking the next scheduled occurrence
 # indefinitely.
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Minutes 45)
 
-Register-ScheduledTask -TaskName "SDETOutreachRunAll" -Action $action -Trigger $trigger -Settings $settings -User $currentUser -RunLevel Limited -Force
+Register-ScheduledTask -TaskName "SDETOutreachRunAll" -Action $action -Trigger @($morningTrigger, $eveningTrigger) -Settings $settings -User $currentUser -RunLevel Limited -Force
 
-Write-Host "Registered scheduled task 'SDETOutreachRunAll': runs at logon, then every 2 hours, from $projectDir"
+Write-Host "Registered scheduled task 'SDETOutreachRunAll': runs at 9:00 AM and 6:00 PM daily, from $projectDir"
 Write-Host "Check status:  Get-ScheduledTask -TaskName SDETOutreachRunAll"
 Write-Host "Run now:       Start-ScheduledTask -TaskName SDETOutreachRunAll"
 Write-Host "Remove it:     Unregister-ScheduledTask -TaskName SDETOutreachRunAll -Confirm:`$false"

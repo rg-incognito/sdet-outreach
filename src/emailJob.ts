@@ -5,7 +5,7 @@ import type { Browser } from "playwright";
 import type { Config, JobPosting } from "./types.js";
 import { logger } from "./logger.js";
 import { recordSentEmail } from "./store/auditLog.js";
-import { upsertTrackerRow } from "./excel/trackerSheet.js";
+import { upsertTrackerRow } from "./sheets/trackerSheet.js";
 import type { GeminiClient } from "./gemini/client.js";
 import { extractSkills } from "./gemini/extractSkills.js";
 import { generateOutreach } from "./gemini/generateOutreach.js";
@@ -71,7 +71,19 @@ export async function tailorAndSend(
       pdfBuffer = await renderResumeToPdf(masterResume, pdfPath, browser);
     }
 
-    const outreach = await generateOutreach(geminiClient, job, scored.matchedKeywords, cfg.candidateName, cfg.candidatePhone, roleTitle);
+    const outreach = await generateOutreach(
+      geminiClient,
+      job,
+      scored.matchedKeywords,
+      cfg.candidateName,
+      cfg.candidatePhone,
+      roleTitle,
+      masterResume,
+      cfg.candidateCurrentCTC,
+      cfg.candidateExpectedCTC,
+      cfg.candidateNoticePeriod,
+      cfg.candidateLocation
+    );
     subject = outreach.subject;
     body = outreach.body;
     const attachmentFilename = `${sanitizeFilename(cfg.candidateName)}_Resume.pdf`;
@@ -92,7 +104,7 @@ export async function tailorAndSend(
       atsScore: score,
       sentAt,
     });
-    await upsertTrackerRow({
+    await upsertTrackerRow(cfg, {
       updatedAt: sentAt,
       status: "Sent",
       jobTitle: roleTitle,
@@ -111,7 +123,7 @@ export async function tailorAndSend(
     logger.error(`Failed to send to ${recruiterEmail} for ${roleTitle} @ ${job.company}: ${message}`);
 
     if (!dryRun) {
-      await upsertTrackerRow({
+      await upsertTrackerRow(cfg, {
         updatedAt: new Date().toISOString(),
         status: "Failed",
         jobTitle: roleTitle,

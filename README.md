@@ -2,8 +2,10 @@
 
 Finds LinkedIn posts asking Automation Test Engineer / SDET candidates to send their
 resume, and automatically emails a personalized outreach message with your resume
-attached. Fully local, single command end to end, backed by a local Excel file — no
-cloud services beyond the Gemini and Gmail APIs.
+attached. Scraping and sending both still run locally on this PC (LinkedIn needs the
+local session, and Gmail sends need this machine to be on), but the Posts/Tracker data
+itself lives in an online Google Sheet — open it from your phone or any browser, no need
+to be at this PC or have Excel installed.
 
 ```
 npm run run-all              # scrape LinkedIn -> tailor -> send, all in one run
@@ -13,9 +15,9 @@ npm run run-all -- --dry-run # same, but only logs what would send - no real ema
 Under the hood this is two steps run back to back in one process:
 
 1. **Scrape** — searches LinkedIn's post/content feed with two boolean queries and
-   writes every result with a usable recruiter email to the **Posts** sheet inside
-   `data/tracker.xlsx`. Must run on this PC — LinkedIn needs the local login session and
-   a residential IP.
+   writes every result with a usable recruiter email to the **Posts** sheet of the online
+   Google Sheet. Must run on this PC — LinkedIn needs the local login session and a
+   residential IP.
 2. **AI outreach + send** — reads the Posts sheet, skips any recruiter email whose latest
    Tracker row is already `Sent`, scores your resume against the post's keywords,
    generates a personalized outreach email via Gemini, and **automatically emails the
@@ -41,7 +43,8 @@ this is the closest equivalent to "how many pages deep to go").
 
 ## The Tracker sheet: full record + automatic retry of failures
 
-`data/tracker.xlsx` has two sheets:
+The online Google Sheet has two sheets (see "Google Sheets setup" below for how it's
+created and authenticated):
 
 - **Posts** — raw scrape output (Scraped At, Title, Company, Recruiter Email,
   Description, Job URL), deduped by Job URL. This is the input queue.
@@ -59,9 +62,9 @@ automatically next time `run-all` (or the send step alone) runs. A later success
 **updates that same row in place** rather than adding a duplicate, so the sheet always
 shows current status per recruiter, not a growing log of attempts.
 
-Open `data/tracker.xlsx` directly in Excel any time to review it. Close it before a
-scheduled run tries to write to it — a locked/open file will fail that run's write (logged
-loudly as an ERROR, since it means that recruiter's status wasn't recorded).
+Open the Google Sheet in a browser any time to review it — no need to close anything
+first (unlike the old local `.xlsx` file, the Sheets API has no lock-file problem; concurrent
+reads while a run is writing are fine).
 
 ## Outreach emails
 
@@ -90,13 +93,46 @@ failed and which one it's trying next; confirmed in practice against real quota
 exhaustion on this key (two `2.0-flash-lite` variants both hit `RESOURCE_EXHAUSTED` before
 falling through to a working model).
 
-## Why Excel instead of Google Sheets
+## Google Sheets setup
 
-Google Sheets is a cloud API — that's what lets JobMailer (this project's sibling) run
-its send step on a GitHub Actions hosted runner while scraping stays local. A local
-`.xlsx` file only exists on this PC's disk, so a hosted runner can't reach it. That's why
-this project runs entirely locally — one scheduled task, no GitHub Actions — and sends
-only go out while this PC is on and logged in.
+The Posts/Tracker data lives in a Google Sheet, authenticated via a Google Cloud service
+account (no interactive login, works unattended for the scheduled task). This project
+still runs entirely locally — scraping needs the local LinkedIn session and sending needs
+this PC on — only the *storage* is now online, via `src/sheets/`.
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/), create (or reuse) a
+   project, then enable the **Google Sheets API** for it
+   (APIs & Services → Enable APIs and Services → search "Google Sheets API").
+2. Create a service account (APIs & Services → Credentials → Create Credentials → Service
+   Account). No roles/permissions are needed at the project level — access is granted per
+   sheet in the next step.
+3. Open the service account → Keys → Add Key → Create new key → JSON. This downloads a
+   JSON file containing `client_email` and `private_key`.
+4. Create a new Google Sheet (or reuse an existing blank one) in your own Google Drive.
+   Click **Share** and add the service account's `client_email` (looks like
+   `...@...iam.gserviceaccount.com`) as **Editor**.
+5. Copy the spreadsheet ID out of its URL:
+   `https://docs.google.com/spreadsheets/d/`**`THIS_PART`**`/edit`.
+6. In `.env`, set:
+   - `GOOGLE_SHEETS_SPREADSHEET_ID` — the ID from step 5.
+   - `GOOGLE_SERVICE_ACCOUNT_EMAIL` — the JSON file's `client_email`.
+   - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` — the JSON file's `private_key`, pasted as-is
+     (it already contains literal `\n` sequences, which `src/config.ts` unescapes back to
+     real newlines — no need to reformat it).
+
+Sheets and their header rows (`Posts`, `Tracker`) are created automatically on first run
+if they don't already exist — no manual sheet setup needed beyond sharing it with the
+service account.
+
+**If you already have data in the old local `data/tracker.xlsx`** from before this
+project moved to Google Sheets, migrate it once the sheet above is set up, *before* your
+first real (non-`--dry-run`) `run-all` against it:
+```
+npm run migrate-xlsx-to-sheets
+```
+This matters most for the Tracker sheet, since it's the dedup source of truth — skipping
+the migration means every recruiter already emailed from the old file would look unsent
+and could get emailed again.
 
 ## One-time setup
 
@@ -113,6 +149,8 @@ only go out while this PC is on and logged in.
      (https://myaccount.google.com/security), then generate an App Password
      (https://myaccount.google.com/apppasswords) and paste the 16-character password here
      (no spaces).
+   - `GOOGLE_SHEETS_SPREADSHEET_ID` / `GOOGLE_SERVICE_ACCOUNT_EMAIL` /
+     `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` — see "Google Sheets setup" above.
 
 3. **Master resume**: put your resume file in this folder and update `config.json`:
    - `masterResumePath` — e.g. `"My_Resume.pdf"` (`.md`/`.txt`/`.docx`/`.pdf` all
@@ -138,8 +176,8 @@ only go out while this PC is on and logged in.
    ```
    powershell -ExecutionPolicy Bypass -File scripts/register-task.ps1
    ```
-   Fires `npm run run-all` once at logon, then every 2 hours after that, for as long as
-   the machine is on and you're logged in.
+   Fires `npm run run-all` twice a day, at 9:00 AM and 6:00 PM, as long as the machine is
+   on and you're logged in at those times.
 
 ## Running it day to day
 
@@ -147,6 +185,19 @@ only go out while this PC is on and logged in.
 npm run run-all -- --dry-run    # safe: logs what would send, no real email, no sheet write
 npm run run-all                 # real: scrape, then send to every pending row
 ```
+
+Requires network access to the Google Sheets API in addition to Gemini/Gmail/LinkedIn —
+if the sheet is unreachable (bad credentials, not shared with the service account, no
+internet), reads/writes to Posts and Tracker will fail loudly in the logs.
+
+Note that scraping is never gated by `--dry-run` — only the send step is. A dry run still
+does a real LinkedIn scrape and writes any newly-found posts to the online Posts sheet;
+it just skips sending email and skips writing to the Tracker sheet.
+
+**Manual trigger, outside the 9:00 AM / 6:00 PM schedule**: double-click
+`scripts/run-now.bat` (or run it from a terminal, optionally with `--dry-run`) — it `cd`s
+into the project root, runs `npm run run-all`, and pauses at the end so the console
+window stays open to review the output.
 
 Check `logs/run-*.log` for how many posts were scraped, how many had a usable email, and
 per-recruiter send results. `logs/audit.log` has a durable JSON-lines record of every
@@ -181,9 +232,14 @@ Unregister-ScheduledTask -TaskName SDETOutreachRunAll -Confirm:$false   # remove
 - **Known non-recruiting mailboxes are filtered out** before reaching the Posts sheet —
   `src/utils/isGenericMailbox.ts` blocklists things like ADA accommodation lines,
   employee-relations, legal/compliance, support/noreply, etc.
-- **India-located posts are filtered out** — `src/utils/isIndianLocation.ts` checks the
-  post body text for India city/region names. Delete this filter call in
-  `src/scrapeToPosts.ts` if you don't want it.
+- **Posts that aren't actually offering a job are filtered out** —
+  `src/gemini/isOpportunityPost.ts` reads each new post's text via Gemini and drops it
+  (no row written) if it's not someone (recruiter/company) directly offering a role, e.g.
+  a candidate's own "open to work, please refer me" post, a repost/comment on someone
+  else's listing, or an unrelated post that merely contains an email address. Runs once
+  per new post that already has a usable, non-generic email (skips posts already in the
+  sheet from a prior run, to avoid re-spending quota). On a Gemini error for a given post,
+  it fails open (keeps the post) rather than dropping a possibly-genuine lead.
 - **Emails send automatically with no human review step.** Every real send is appended to
   `logs/audit.log` and reflected in the Tracker sheet, since this is otherwise
   irreversible. Use `--dry-run` liberally when testing changes.
@@ -202,25 +258,29 @@ Unregister-ScheduledTask -TaskName SDETOutreachRunAll -Confirm:$false   # remove
   `scripts/scrape-to-sheet.ts` and `scripts/run-all.ts`
 - `src/filters/extractEmail.ts` — pulls a single usable email out of a post's text
 - `src/utils/isGenericMailbox.ts` — blocklist for non-recruiting mailbox patterns
-- `src/utils/isIndianLocation.ts` — drops India-located posts
-- `src/excel/` — `workbook.ts` (shared `data/tracker.xlsx` load/save), `postsSheet.ts`
-  (raw scrape output, deduped by post URL), `trackerSheet.ts` (one row per recruiter
-  email, upserted; `Status: Sent` is the only thing that blocks a retry)
+- `src/sheets/` — `client.ts` (authenticated Google Sheets API doc, cached per process),
+  `postsSheet.ts` (raw scrape output, deduped by post URL), `trackerSheet.ts` (one row per
+  recruiter email, upserted; `Status: Sent` is the only thing that blocks a retry)
 - `src/emailJob.ts` — scoring/attach/send logic; catches failures internally and always
   writes a Tracker row (`Sent` or `Failed`) with whatever was generated
 - `src/pipeline.ts` — reads Posts sheet, dedups against Tracker sheet, tailors + sends
 - `src/resume/` — resume loading, ATS keyword scoring, PDF rendering (no AI rewriting)
 - `src/gemini/` — `client.ts` (multi-model fallback chain), `extractSkills.ts` (JD
   keyword extraction), `generateOutreach.ts` (outreach email generation, name+phone
-  sign-off)
+  sign-off), `isOpportunityPost.ts` (screens out posts that aren't actually offering a
+  role, before they reach the Posts sheet)
 - `src/mailer/sendMail.ts` — Gmail SMTP sending (no-op under `--dry-run`)
 - `src/store/auditLog.ts` — local audit log (`logs/audit.log`)
 - `src/index.ts` — send-only CLI entry point (`--dry-run`)
 - `scripts/run-all.ts` — complete local run: scrape then send, one process
 - `scripts/scrape-to-sheet.ts` — scrape-only CLI
 - `scripts/linkedin-login.ts` — one-time interactive LinkedIn login
-- `scripts/register-task.ps1` — single Windows Scheduled Task (`npm run run-all`, logon +
-  every 2h)
+- `scripts/register-task.ps1` — single Windows Scheduled Task (`npm run run-all`, twice
+  daily at 9:00 AM and 6:00 PM)
+- `scripts/run-now.bat` — manual trigger (double-click or run with `--dry-run`) for an
+  on-demand run outside the twice-daily schedule
+- `scripts/migrate-xlsx-to-sheets.ts` — one-time migration of the old local
+  `data/tracker.xlsx` into the online Google Sheet
 
 ## Config reference (`config.json`)
 
@@ -241,5 +301,8 @@ Unregister-ScheduledTask -TaskName SDETOutreachRunAll -Confirm:$false   # remove
 | `GEMINI_API_KEY` | Yes | Gemini API key (Google AI Studio) |
 | `GMAIL_USER` | Yes | Gmail address sends come from |
 | `GMAIL_APP_PASSWORD` | Only for real sends | 16-char Gmail App Password; `--dry-run` works without it |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | Yes | ID of the Google Sheet backing Posts/Tracker (from its URL) |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Yes | Service account `client_email`; must be shared as Editor on the sheet |
+| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Yes | Service account `private_key`, pasted as-is from the downloaded JSON |
 | `GEMINI_MODEL` | No | Overrides the primary model (default `gemini-flash-lite-latest`) |
 | `GEMINI_FALLBACK_MODEL` | No | Overrides the second model tried (default `gemini-flash-latest`) |

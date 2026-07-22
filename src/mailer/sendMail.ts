@@ -37,7 +37,7 @@ export async function sendMail(
   });
 
   await transporter.sendMail({
-    from: cfg.gmail.user,
+    from: cfg.candidateName ? `"${cfg.candidateName}" <${cfg.gmail.user}>` : cfg.gmail.user,
     to: email.to,
     subject: email.subject,
     text: email.body,

@@ -1,8 +1,8 @@
 import { chromium } from "playwright";
 import type { Config, FilterCounts, JobPosting } from "./types.js";
 import { logger } from "./logger.js";
-import { readPosts } from "./excel/postsSheet.js";
-import { getSentEmails } from "./excel/trackerSheet.js";
+import { readPosts } from "./sheets/postsSheet.js";
+import { getSentEmails } from "./sheets/trackerSheet.js";
 import { loadMasterResume } from "./resume/loadMasterResume.js";
 import { createGeminiClient } from "./gemini/client.js";
 import { tailorAndSend } from "./emailJob.js";
@@ -15,15 +15,14 @@ import { displayTitle } from "./utils/displayTitle.js";
 export async function runPipeline(cfg: Config, dryRun: boolean): Promise<FilterCounts> {
   logger.info(`Starting run${dryRun ? " --dry-run" : ""}...`);
 
-  const posts = await readPosts();
-  const sentEmails = await getSentEmails();
+  const posts = await readPosts(cfg);
+  const sentEmails = await getSentEmails(cfg);
 
   const withEmail = posts.filter((p) => p.recruiterEmail);
   const pending = withEmail.filter((p) => !sentEmails.has(p.recruiterEmail.trim().toLowerCase()));
 
   const counts: FilterCounts = {
     scraped: posts.length,
-    notIndia: posts.length,
     hasEmail: withEmail.length,
     sent: 0,
   };

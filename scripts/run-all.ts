@@ -5,8 +5,8 @@ import { logger } from "../src/logger.js";
 
 // Complete local run: scrape LinkedIn into the Posts sheet, then immediately tailor +
 // send for every pending row - both steps in one sequential process, so there's no
-// risk of the two steps opening data/tracker.xlsx at the same time (unlike two separately
-// scheduled tasks). This is what scripts/register-task.ps1 schedules.
+// risk of the two steps racing to write the online Google Sheet at the same time (unlike
+// two separately scheduled tasks). This is what scripts/register-task.ps1 schedules.
 async function main(): Promise<void> {
   const dryRun = process.argv.includes("--dry-run");
   const cfg = loadConfig();

@@ -22,6 +22,14 @@ export interface Config {
     user: string;
     appPassword: string;
   };
+  sheets: {
+    // The online Google Sheet backing the Posts and Tracker sheets (see src/sheets/) -
+    // replaces the old local data/tracker.xlsx. Service account must be shared as an
+    // Editor on this spreadsheet.
+    spreadsheetId: string;
+    serviceAccountEmail: string;
+    privateKey: string;
+  };
   search: {
     // Full LinkedIn content-search boolean query strings, run as-is (one search per
     // entry, results merged) - see linkedin.ts. This *is* the filter stage; there's no
@@ -38,11 +46,14 @@ export interface Config {
   masterResumePath: string;
   candidateName: string;
   candidatePhone: string;
+  candidateCurrentCTC: string;
+  candidateExpectedCTC: string;
+  candidateNoticePeriod: string;
+  candidateLocation: string;
 }
 
 export interface FilterCounts {
   scraped: number;
-  notIndia: number;
   hasEmail: number;
   sent: number;
 }

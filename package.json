@@ -10,12 +10,14 @@
     "dev": "tsx src/index.ts",
     "linkedin-login": "tsx scripts/linkedin-login.ts",
     "scrape-to-sheet": "tsx scripts/scrape-to-sheet.ts",
-    "run-all": "tsx scripts/run-all.ts"
+    "run-all": "tsx scripts/run-all.ts",
+    "migrate-xlsx-to-sheets": "tsx scripts/migrate-xlsx-to-sheets.ts"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",
     "dotenv": "^16.4.5",
-    "exceljs": "^4.4.0",
+    "google-auth-library": "^10.9.0",
+    "google-spreadsheet": "^5.3.0",
     "mammoth": "^1.8.0",
     "marked": "^14.1.2",
     "nodemailer": "^9.0.3",
@@ -27,6 +29,7 @@
     "@types/node": "^22.7.5",
     "@types/nodemailer": "^8.0.1",
     "@types/pdf-parse": "^1.1.5",
+    "exceljs": "^4.4.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3"
   }
