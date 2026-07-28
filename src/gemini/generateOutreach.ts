@@ -28,14 +28,14 @@ export async function generateOutreach(
     ? `Sign off with the candidate's name "${candidateName}" on one line, then their phone number "${candidatePhone}" on the next line — exactly those two lines, nothing else after (no email address or other contact field; the phone number is the only extra contact detail to include).`
     : `Sign off as "${candidateName}" only — no phone number, email address, or any other contact field after the name; the message itself is the contact method.`;
 
-  const detailLines: string[] = [];
-  if (candidateCurrentCTC) detailLines.push(`Current CTC: ${candidateCurrentCTC}`);
-  if (candidateExpectedCTC) detailLines.push(`Expected CTC: ${candidateExpectedCTC}`);
-  if (candidateNoticePeriod) detailLines.push(`Notice Period: ${candidateNoticePeriod}`);
-  if (candidateLocation) detailLines.push(`Current Location: ${candidateLocation}`);
+  const availableDetails: string[] = [];
+  if (candidateCurrentCTC) availableDetails.push(`Current CTC: ${candidateCurrentCTC}`);
+  if (candidateExpectedCTC) availableDetails.push(`Expected CTC: ${candidateExpectedCTC}`);
+  if (candidateNoticePeriod) availableDetails.push(`Notice Period: ${candidateNoticePeriod}`);
+  if (candidateLocation) availableDetails.push(`Current Location: ${candidateLocation}`);
 
-  const detailsInstruction = detailLines.length
-    ? `After mentioning the attached resume and before the closing sign-off, include this exact labeled block, one "Label: value" line per line, in this exact order, copied verbatim with no rewording, rounding, or reformatting of the values:\n${detailLines.join("\n")}`
+  const detailsInstruction = availableDetails.length
+    ? `The candidate has these details available, but they are NOT all relevant to every post:\n${availableDetails.join("\n")}\nRead the post excerpt below carefully. Only include a "Label: value" line for a detail above if the post/job description explicitly asks applicants to share that specific piece of information (e.g. it asks for current CTC, expected CTC, notice period, or current location/city). For each detail the post explicitly asks for, include it as its own line before the closing sign-off, copied verbatim from the list above with no rewording, rounding, or reformatting. Do not include any line for a detail the post did not ask for, and do not include the block at all if the post didn't ask for any of them.`
     : `Do not include a CTC, expected CTC, notice period, or location block — none of those values were provided.`;
 
   const prompt = `Write a short, professional cold outreach email from a job candidate about a specific LinkedIn post. Keep it under 150 words, 2-3 short paragraphs, no generic filler. This post either explicitly asked candidates to send/email their resume or CV, or listed a recruiting contact address - write as if reaching out directly to that contact with genuine interest in the role, mentioning that your resume is attached. Reference the exact role title and company, and naturally mention 2-3 of the candidate's relevant skills from this list: ${matchedKeywords.join(", ") || "(none extracted)"}. End with a polite call to action. ${signOffInstruction}
